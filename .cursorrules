@@ -1,0 +1,243 @@
+# Video Analytics Orchestrator - Cursor Rules
+
+## 1. DOCUMENTATION POLICY
+
+**NEVER** create or update README.md files unless explicitly requested by the user.
+- No automatic documentation generation
+- No changelog files
+- Focus on code, not documentation
+
+## 2. CODE ARCHITECTURE PRINCIPLES
+
+### Object-Oriented Design
+- Use abstract base classes for extensibility
+- Apply SOLID principles
+- Implement dependency injection
+- Use composition over inheritance where appropriate
+- All models must inherit from BaseModel
+- All tools must be organized in static utility classes
+
+### Clean Code Standards
+- No explanatory comments in code
+- Self-documenting function/variable names
+- Type hints for all function parameters and returns
+- Keep functions under 20 lines
+- Single responsibility per class/function
+- No debugging print statements in production code
+
+### Error Handling
+- Use try-except blocks only where necessary
+- Fail fast with clear error messages
+- No silent failures
+
+## 3. PROJECT STRUCTURE
+
+The project MUST follow this exact structure:
+
+```
+Cursor_hack/
+├── .cursor/              # Cursor IDE configuration
+│   └── .cursorrules      # This file
+│
+├── cfg/                  # Configuration files
+│   ├── __init__.py
+│   ├── api_keys.py       # API key management
+│   ├── model_config.py   # Model paths and settings
+│   └── settings.py       # General settings
+│
+├── toolbox/              # Core CV library
+│   ├── __init__.py
+│   ├── models/           # Computer vision models
+│   │   ├── __init__.py
+│   │   ├── base.py       # BaseModel abstract class
+│   │   ├── detection.py  # YOLO detectors
+│   │   ├── segmentation.py  # SAM models
+│   │   ├── tracking.py   # ByteTrack wrapper
+│   │   ├── flow.py       # RAFT optical flow
+│   │   └── pose.py       # MediaPipe pose/hands
+│   │
+│   └── tools/            # Analysis tools
+│       ├── __init__.py
+│       ├── spatial.py    # Spatial analysis tools
+│       ├── motion.py     # Motion analysis tools
+│       ├── temporal.py   # Temporal analysis tools
+│       └── interaction.py  # Interaction detection tools
+│
+├── scripts/              # Utility scripts
+│   ├── download_models.py
+│   └── setup.py
+│
+├── models/               # Model checkpoints (gitignored)
+│   └── *.pt, *.pth
+│
+├── prompts/              # LLM system prompts
+│   └── system_prompt.txt
+│
+├── workspace/            # Code execution directory (gitignored)
+│
+├── main.py               # Main orchestrator entry point
+└── requirements.txt      # Python dependencies
+```
+
+### File Placement Rules
+1. All model classes → `toolbox/models/`
+2. All tool classes → `toolbox/tools/`
+3. All configuration → `cfg/`
+4. All utility scripts → `scripts/`
+5. API keys, credentials → `cfg/api_keys.py` (gitignored)
+6. Model checkpoints → `models/` directory
+
+## 4. PROJECT WORKFLOW
+
+This project follows a three-layer architecture:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    USER INPUT                               │
+│              Natural Language Video Query                   │
+└────────────────────────┬────────────────────────────────────┘
+                         │
+                         ▼
+┌─────────────────────────────────────────────────────────────┐
+│                 LAYER 1: GEMINI PLANNER                     │
+│  • Receives: User prompt + video path                       │
+│  • Processes: Decomposes into execution plan                │
+│  • Outputs: Structured JSON with step-by-step plan         │
+│  • Location: main.py → GeminiPlanner class                  │
+│  • System Prompt: prompts/system_prompt.txt                 │
+│                                                             │
+│  Key: Gemini NEVER processes video, only plans tasks       │
+└────────────────────────┬────────────────────────────────────┘
+                         │ JSON Plan
+                         ▼
+┌─────────────────────────────────────────────────────────────┐
+│               LAYER 2: CURSOR MCP AGENT                     │
+│  • Receives: JSON execution plan from Gemini                │
+│  • Processes: Generates Python code using toolbox          │
+│  • Location: workspace/ (dynamically generated)             │
+│  • Uses: toolbox.models.* and toolbox.tools.*              │
+│                                                             │
+│  Key: Writes executable Python, not pseudocode             │
+└────────────────────────┬────────────────────────────────────┘
+                         │ Python Script
+                         ▼
+┌─────────────────────────────────────────────────────────────┐
+│              LAYER 3: PYTHON EXECUTION                      │
+│  • Executes: Generated script on actual video              │
+│  • Uses: Model checkpoints from models/                    │
+│  • Uses: toolbox.models.* for inference                    │
+│  • Uses: toolbox.tools.* for analysis                      │
+│  • Outputs: Frame index, saved frames, metrics             │
+│                                                             │
+│  Key: Actual CV processing happens here                    │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Workflow Guidelines
+
+**When generating code for video analysis:**
+
+1. **Import from toolbox structure:**
+   ```python
+   from toolbox.models.detection import YOLODetector
+   from toolbox.models.segmentation import FastSAMSegmenter
+   from toolbox.tools.spatial import SpatialTools
+   from toolbox.tools.motion import MotionTools
+   from cfg.model_config import MODEL_PATHS
+   ```
+
+2. **Load models using config:**
+   ```python
+   detector = YOLODetector(MODEL_PATHS['yolov10n'])
+   detector.load()
+   ```
+
+3. **Follow efficiency principles:**
+   - Sample frames first (frame_sampler)
+   - Detect → Track → Analyze (not per-frame detection)
+   - Use binary search for temporal events
+   - Minimize model inference calls
+
+4. **Output requirements:**
+   - Return frame index as primary result
+   - Save result frame as `workspace/result.jpg`
+   - Print clear console output with frame number
+
+## 5. CONFIGURATION MANAGEMENT
+
+### API Keys (cfg/api_keys.py)
+```python
+import os
+
+class APIKeys:
+    GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+    
+    @classmethod
+    def validate(cls):
+        if not cls.GEMINI_API_KEY:
+            raise ValueError("GEMINI_API_KEY not set")
+```
+
+### Model Paths (cfg/model_config.py)
+```python
+from pathlib import Path
+
+BASE_DIR = Path(__file__).parent.parent
+MODELS_DIR = BASE_DIR / "models"
+
+MODEL_PATHS = {
+    'yolov10n': MODELS_DIR / 'yolov10n.pt',
+    'yolov9c': MODELS_DIR / 'yolov9c.pt',
+    'fastsam': MODELS_DIR / 'fastsam-x.pt',
+    'mobilesam': MODELS_DIR / 'mobile_sam.pt',
+    'raft': MODELS_DIR / 'raft_small.pth',
+}
+```
+
+## 6. WHEN MODIFYING CODE
+
+### Adding New Models
+1. Create class in `toolbox/models/<category>.py`
+2. Inherit from BaseModel
+3. Implement `load()` and `inference()` methods
+4. Update `toolbox/models/__init__.py` exports
+5. Add checkpoint path to `cfg/model_config.py`
+
+### Adding New Tools
+1. Create static method in appropriate `toolbox/tools/<category>.py`
+2. Keep tools stateless
+3. Update `toolbox/tools/__init__.py` exports
+4. Add to system prompt if needed
+
+### Modifying Main Flow
+1. Changes to orchestration logic → `main.py`
+2. Changes to Gemini planning → `prompts/system_prompt.txt`
+3. Changes to execution → generate code in `workspace/`
+
+## 7. FORBIDDEN ACTIONS
+
+❌ Creating README.md or documentation files
+❌ Adding explanatory comments to code
+❌ Hardcoding API keys or credentials
+❌ Placing models outside toolbox/models/
+❌ Placing tools outside toolbox/tools/
+❌ Creating files outside defined structure
+❌ Using print() for debugging in production code
+❌ Violating OOP principles
+
+## 8. TESTING APPROACH
+
+When writing test code:
+- Tests go in `scripts/test_*.py`
+- Use unittest or pytest framework
+- Mock external dependencies
+- Test one component at a time
+
+## SUMMARY
+
+This is a three-layer video analysis orchestrator:
+1. **Gemini** plans the task
+2. **Cursor** writes the code
+3. **Python** executes on video
+
+Follow the structure, write clean OOP code, never create documentation files.
