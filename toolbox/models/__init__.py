@@ -13,5 +13,5 @@ __all__ = [
     'ByteTracker',
     'RAFTFlow',
     'MediaPipeHands',
-    'MediaPipePose'
+    'MediaPipePose',
 ]

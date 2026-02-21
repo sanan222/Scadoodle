@@ -11,12 +11,30 @@ build/
 .env
 .venv
 venv/
-workspace/
+
+# IDE
+.DS_Store
+.cursor/
+
+# Large model weights
+models/*.pt
+models/*.pth
+models/*.task
+models/*.onnx
+models/*.tflite
+
+# Videos & frames
 *.mp4
 *.avi
 *.mov
-.DS_Store
+*.mkv
+*.webm
+videos/
 
+# Runtime artifacts
+workspace/
+uploads/
+
+# Credentials & secrets
 cfg/api_keys.py
-models/*.pt
-models/*.pth
+gen-lang-client-*.json

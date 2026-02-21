@@ -44,8 +44,38 @@ class TemporalTools:
         return annotated
     
     @staticmethod
-    def threshold_trigger(signal: List[float], threshold: float) -> int:
+    def threshold_trigger(signal: list, threshold=0.5) -> int:
+        """Return the index of the first value that meets or exceeds threshold.
+
+        Works with both numeric signals (val >= threshold) and boolean signals
+        (first True entry).
+        """
         for i, val in enumerate(signal):
-            if val > threshold:
+            if isinstance(val, bool):
+                if val:
+                    return i
+            elif val >= threshold:
                 return i
-        return -1
+        return None
+
+    @staticmethod
+    def rising_edge_detector(signal: list, min_gap: int = 3) -> int:
+        """Find the first False→True transition after at least `min_gap` consecutive Falses.
+
+        Useful for detecting *pickup* events: the object was visible but untouched
+        for several frames, then contact begins.  Returns the index of the first
+        True after the gap, or None.
+        """
+        consecutive_false = 0
+        for i, val in enumerate(signal):
+            if isinstance(val, bool):
+                is_true = val
+            else:
+                is_true = val >= 0.5
+            if not is_true:
+                consecutive_false += 1
+            else:
+                if consecutive_false >= min_gap:
+                    return i
+                consecutive_false = 0
+        return None
